@@ -95,15 +95,16 @@ func (q *Querier) AppendParams(params ...interface{}) *Querier {
 	return q
 }
 
-func (q *Querier) FieldDefinitions(fields []Field) *Querier {
+func (q *Querier) FieldDefinitions(prefix string, fields []Field) *Querier {
 	q.insertSep()
-	q.writeFields(fields, false, true, false)
+	q.writeFields(prefix, fields, false, true, false)
+	q.insertSepNext = true
 	return q
 }
 
 func (q *Querier) Fields(array bool, fields []Field) *Querier {
 	q.insertSep()
-	q.writeFields(fields, array, false, false)
+	q.writeFields("", fields, array, false, false)
 	return q
 }
 
@@ -123,7 +124,7 @@ func (q *Querier) ValueMap(array bool, fields []Field, values ValueMap) *Querier
 
 func (q *Querier) SetValues(fields []Field, values ValueMap) *Querier {
 	q.insertSep()
-	q.writeFields(fields, false, false, true)
+	q.writeFields("", fields, false, false, true)
 	q.params = append(q.params, values.MapToFields(fields, nil)...)
 	return q
 }
@@ -304,12 +305,13 @@ func (q *Querier) writeSpace(s string) {
 	q.query.WriteString(" ")
 }
 
-func (q *Querier) writeFields(fields []Field, array, defs, sets bool) {
+func (q *Querier) writeFields(prefix string, fields []Field, array, defs, sets bool) {
 	if array {
 		q.query.WriteString("(")
 	}
 
 	if len(fields) != 0 {
+		q.query.WriteString(prefix)
 		q.query.WriteString(fields[0].Name)
 		if defs {
 			q.query.WriteString(" ")
@@ -321,6 +323,7 @@ func (q *Querier) writeFields(fields []Field, array, defs, sets bool) {
 		}
 		for i := 1; i < len(fields); i++ {
 			q.query.WriteString(fieldSep)
+			q.query.WriteString(prefix)
 			q.query.WriteString(fields[i].Name)
 			if defs {
 				q.query.WriteString(" ")

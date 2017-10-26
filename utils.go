@@ -81,6 +81,21 @@ func DefaultBindVar(q *Querier, _ int) {
 	q.WriteString("?")
 }
 
+// AppendToStringSlice returns a ScanFunc that will append any result of the first column of the query to slice s. Panics when s is invalid.
+func AppendToStringSlice(s *[]string) ScanFunc {
+	if s == nil {
+		panic("invalid string slice")
+	}
+	return func(_ *Querier, r *sql.Rows) error {
+		var str string
+		if err := r.Scan(&str); err != nil {
+			return err
+		}
+		*s = append(*s, str)
+		return nil
+	}
+}
+
 // extractField returns info about a StructField.
 func extractFieldInfo(field *reflect.StructField, mapper TypeMapper) (name, dataType string, ignore, inlineStruct bool) {
 	name = field.Name
