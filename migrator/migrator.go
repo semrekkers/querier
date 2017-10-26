@@ -23,7 +23,7 @@ type Migrator struct {
 	dbInfo  DBInfo
 }
 
-type MigrationResult struct {
+type Result struct {
 	Tables, Columns []string
 }
 
@@ -35,8 +35,8 @@ func NewFromDB(db *sugar.DB, dbInfo DBInfo) *Migrator {
 	return &Migrator{db.DB, db.BindVar, db.Mapper, dbInfo}
 }
 
-func (m *Migrator) Migrate(models ...Model) (*MigrationResult, error) {
-	var result MigrationResult
+func (m *Migrator) Migrate(models ...Model) (*Result, error) {
+	var result Result
 
 	for _, model := range models {
 		tableName := model.TableName()
