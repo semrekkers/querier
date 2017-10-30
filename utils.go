@@ -12,7 +12,7 @@ const (
 )
 
 var (
-	reflectTypeScanner     = reflect.TypeOf(sql.Scanner(nil))
+	reflectTypeScanner     = reflect.TypeOf((*sql.Scanner)(nil)).Elem()
 	reflectTypeByteSlice   = reflect.TypeOf([]byte{})
 	reflectTypeTime        = reflect.TypeOf(time.Time{})
 	reflectTypeNullString  = reflect.TypeOf(sql.NullString{})
@@ -77,6 +77,7 @@ func DefaultTypeMapper(t reflect.Type) (out string, ok bool) {
 	return
 }
 
+// DefaultBindVar is the default bindvar formatter.
 func DefaultBindVar(q *Querier, _ int) {
 	q.WriteString("?")
 }
@@ -116,10 +117,13 @@ func extractFieldInfo(field *reflect.StructField, mapper TypeMapper) (name, data
 		dataType = tagParts[1]
 	}
 	if dataType == "" {
-		if field.Type.Kind() == reflect.Struct && !field.Type.Implements(reflectTypeScanner) {
-			// This field is an inline struct.
-			inlineStruct = true
-			return
+		if field.Type.Kind() == reflect.Struct {
+			receiver := reflect.PtrTo(field.Type)
+			if field.Type != reflectTypeTime && !receiver.Implements(reflectTypeScanner) {
+				// This field is an inline struct.
+				inlineStruct = true
+				return
+			}
 		}
 		if mapper != nil {
 			var ok bool

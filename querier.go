@@ -62,7 +62,7 @@ func NewQuerier(ex Executor, bindVar Formatter) *Querier {
 func (q *Querier) Write(query string, params ...interface{}) *Querier {
 	q.insertSep()
 	q.writeSpace(query)
-	q.params = append(q.params, params)
+	q.params = append(q.params, params...)
 	return q
 }
 
@@ -77,7 +77,7 @@ func (q *Querier) Writef(format string, args ...interface{}) *Querier {
 func (q *Querier) Append(query string, params ...interface{}) *Querier {
 	q.insertSep()
 	q.query.WriteString(query)
-	q.params = append(q.params, params)
+	q.params = append(q.params, params...)
 	q.insertSepNext = true
 	return q
 }
@@ -291,6 +291,24 @@ func (q *Querier) LastInsertID() int64 {
 
 func (q *Querier) WriteString(s string) {
 	q.query.WriteString(s)
+}
+
+func (q *Querier) New() *Querier {
+	return &Querier{ex: q.ex, bindVar: q.bindVar}
+}
+
+func (q *Querier) Reset() *Querier {
+	q.query.Reset()
+	if q.params != nil {
+		q.params = q.params[:0]
+	}
+	q.insertSepNext = false
+	q.err = nil
+	q.lastInsertID, q.rowsAffected = 0, 0
+	if q.deferred != nil {
+		q.deferred = q.deferred[:0]
+	}
+	return q
 }
 
 func (q *Querier) insertSep() {

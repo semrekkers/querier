@@ -144,6 +144,11 @@ func makeFieldSlice(t reflect.Type, fields []Field, mapper TypeMapper, filterSet
 			// Skip this field.
 			continue
 		}
+		if inlineStruct {
+			// Flatten this inline struct.
+			fields = makeFieldSlice(cur.Type, fields, mapper, filterSet, filterExclude)
+			continue
+		}
 		if filterSet != nil {
 			_, inSet := filterSet[name]
 			// If filter mode is include and field is in set then procceed.
@@ -156,15 +161,10 @@ func makeFieldSlice(t reflect.Type, fields []Field, mapper TypeMapper, filterSet
 			}
 		}
 
-		if inlineStruct {
-			// Flatten this inline struct.
-			fields = makeFieldSlice(cur.Type, fields, mapper, filterSet, filterExclude)
-		} else {
-			fields = append(fields, Field{
-				Name:     name,
-				DataType: dataType,
-			})
-		}
+		fields = append(fields, Field{
+			Name:     name,
+			DataType: dataType,
+		})
 	}
 
 	return fields
