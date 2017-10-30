@@ -1,0 +1,10 @@
+language: go
+
+go:
+  - 1.9.x
+
+services:
+  - mysql
+
+env:
+  - SUGAR_USERNAME=root SUGAR_DATABASE=test_db
