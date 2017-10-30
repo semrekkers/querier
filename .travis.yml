@@ -8,3 +8,6 @@ services:
 
 env:
   - SUGAR_USERNAME=root SUGAR_DATABASE=test_db
+
+notifications:
+  email: false
