@@ -45,7 +45,7 @@ func (m *Migrator) Migrate(models ...Model) (*Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		if tableExists {
+		if !tableExists {
 			result.Tables = append(result.Tables, tableName)
 		} else {
 			result.Columns = append(result.Columns, newColumns...)
@@ -79,13 +79,12 @@ func (m *Migrator) migrateModel(tableName string, model Model) (tableExists bool
 			return
 		}
 
-		q.Writef("ALTER TABLE %s (", tableName)
+		q.Writef("ALTER TABLE %s ", tableName)
 		q.FieldDefinitions("ADD ", fields)
 		for _, field := range fields {
 			model.Migrate(q, field.Name)
 			newColumns = append(newColumns, tableName+"."+field.Name)
 		}
-		q.WriteString(")")
 	}
 	err = q.Exec()
 
