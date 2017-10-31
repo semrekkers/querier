@@ -13,7 +13,7 @@ type Model interface {
 	TableName() string
 
 	// CreateTable is called before the table is created. This is useful for, e.g. defining the primary key.
-	CreateTable(*sugar.Querier) error
+	CreateTable(*sugar.Querier)
 
 	// Migrate is called when the migrator discovered a new field in the model.
 	Migrate(db *sugar.DB, column string) error
@@ -91,9 +91,7 @@ func (m *Migrator) migrateModel(model Model, res *Result) error {
 		q := m.db.Querier().Writef("CREATE TABLE %s (", tableName).
 			WriteFields("{name} {dataType}", sugar.FieldSep, fieldSelector.Select()...)
 		q.SetSeparator(sugar.FieldSep)
-		if err = model.CreateTable(q); err != nil {
-			return &MigrationError{Table: tableName, Err: err}
-		}
+		model.CreateTable(q)
 		q.WriteRaw(")")
 		if err = q.Exec(); err != nil {
 			return &MigrationError{Table: tableName, Err: err}
