@@ -12,6 +12,10 @@ var (
 	reflectTypeNullTime = reflect.TypeOf(go_mysql.NullTime{})
 )
 
+func Open(dataSourceName string) (*sugar.DB, error) {
+	return sugar.OpenSpecial("mysql", dataSourceName, sugar.DefaultBindVar, TypeMapper)
+}
+
 func TypeMapper(t reflect.Type) (out string, ok bool) {
 	out, ok = sugar.DefaultTypeMapper(t)
 	if !ok {
