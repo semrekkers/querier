@@ -78,8 +78,8 @@ func DefaultTypeMapper(t reflect.Type) (out string, ok bool) {
 }
 
 // DefaultBindVar is the default bindvar formatter.
-func DefaultBindVar(q *Querier, _ int) {
-	q.WriteString("?")
+func DefaultBindVar(*Querier, int) string {
+	return "?"
 }
 
 // AppendToStringSlice returns a ScanFunc that will append any result of the first column of the query to slice s. Panics when s is invalid.

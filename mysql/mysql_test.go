@@ -1,7 +1,6 @@
 package mysql
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -21,7 +20,7 @@ var (
 	password = os.Getenv("SUGAR_PASSWORD")
 	database = os.Getenv("SUGAR_DATABASE")
 
-	conn *sql.Conn
+	db *sugar.DB
 )
 
 type dummy struct {
@@ -38,46 +37,50 @@ func (*dummy) TableName() string {
 	return "dummy_table"
 }
 
-func (*dummy) Migrate(q *sugar.Querier, column string) {
-	switch column {
-	case migrator.Initialize:
-		q.Append("PRIMARY KEY (ID)")
-		q.Append("UNIQUE (Name)")
-	}
+func (*dummy) CreateTable(q *sugar.Querier) error {
+	q.Write("PRIMARY KEY (ID)")
+	q.Write("UNIQUE (Name)")
+	return nil
+}
+
+func (*dummy) Migrate(db *sugar.DB, column string) error {
+	// Nothing to migrate (yet).
+	return nil
 }
 
 func TestMain(m *testing.M) {
+	var err error
+
+	// Create test database.
 	dsn := fmt.Sprintf("%s:%s@%s/", username, password, address)
-	db, err := sugar.Open("mysql", dsn)
+	db, err = sugar.Open("mysql", dsn)
+	exitOnErr("open database", err)
+	err = db.Querier().Writef("CREATE DATABASE IF NOT EXISTS %s", database).Exec()
+	exitOnErr("create test database", err)
+	db.Close()
+
+	// Open connection.
+	dsn = fmt.Sprintf("%s:%s@%s/%s", username, password, address, database)
+	db, err = sugar.OpenSpecial("mysql", dsn, sugar.DefaultBindVar, TypeMapper)
 	exitOnErr("open database", err)
 	defer db.Close()
-	conn, err = db.Conn(context.Background())
-	exitOnErr("open connection", err)
-	defer conn.Close()
 
-	q := sugar.NewQuerier(conn, sugar.DefaultBindVar)
-	err = q.Writef("CREATE DATABASE IF NOT EXISTS %s", database).Defer(resetQ).Exec()
-	exitOnErr("create test database", err)
-	err = q.Writef("USE %s", database).Defer(resetQ).Exec()
-	exitOnErr("use test database", err)
-
+	// And test!
 	os.Exit(m.Run())
 }
 
 func TestMigration(t *testing.T) {
 	var model dummy
-	m := migrator.New(conn, sugar.DefaultBindVar, TypeMapper, DBInfo{})
+	m := migrator.New(db, DBInfo{})
+
 	res, err := m.Migrate(&model)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log("migration result:", res)
 
-	err = sugar.NewQuerier(conn, sugar.DefaultBindVar).
-		Writef("DROP TABLE %s", model.TableName()).
-		Exec()
-	if err != nil {
-		t.Error("drop dummy table:", err)
+	if err = m.Drop(&model); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -86,8 +89,4 @@ func exitOnErr(name string, err error) {
 		fmt.Printf("error: %s: %s\n", name, err.Error())
 		os.Exit(1)
 	}
-}
-
-func resetQ(q *sugar.Querier) {
-	q.Reset()
 }

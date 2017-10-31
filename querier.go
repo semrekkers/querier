@@ -7,10 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 )
 
 const (
-	fieldSep = ", "
+	// Space is a single space.
+	Space = " "
+	// FieldSep is a single field separator.
+	FieldSep = ", "
 )
 
 var (
@@ -33,19 +37,19 @@ type DeferFunc func(*Querier)
 type ScanFunc func(*Querier, *sql.Rows) error
 
 // Formatter formats a query or a part of a query.
-type Formatter func(*Querier, int)
+type Formatter func(*Querier, int) string
 
 // Querier can build and execute queries.
 type Querier struct {
 	ex Executor
 
-	// Formatters and mappers
+	// Formatters
 	bindVar Formatter
 
 	// Query builder
-	query         bytes.Buffer
-	params        []interface{}
-	insertSepNext bool
+	query  bytes.Buffer
+	sep    string
+	params []interface{}
 
 	// For deffered functions.
 	err          error
@@ -55,77 +59,56 @@ type Querier struct {
 }
 
 func NewQuerier(ex Executor, bindVar Formatter) *Querier {
-	return &Querier{ex: ex, bindVar: bindVar}
+	return &Querier{ex: ex, bindVar: bindVar, sep: Space}
 }
 
 // Write writes a string (query) to the Querier. A single space is appended after query.
 func (q *Querier) Write(query string, params ...interface{}) *Querier {
-	q.insertSep()
-	q.writeSpace(query)
+	q.writeSep()
+	q.query.WriteString(query)
 	q.params = append(q.params, params...)
 	return q
 }
 
 // Writef writes a formatted string (format) to the Querier. A single space is appended after query.
 func (q *Querier) Writef(format string, args ...interface{}) *Querier {
-	q.insertSep()
-	q.writeSpace(fmt.Sprintf(format, args...))
-	return q
-}
-
-// Append appends a string (query) to the Querier. An field separator is also appended if necessary.
-func (q *Querier) Append(query string, params ...interface{}) *Querier {
-	q.insertSep()
-	q.query.WriteString(query)
-	q.params = append(q.params, params...)
-	q.insertSepNext = true
-	return q
-}
-
-// Appendf appends a formatted string (format) to the Querier. An field separator is also appended if necessary.
-func (q *Querier) Appendf(format string, args ...interface{}) *Querier {
-	q.insertSep()
+	q.writeSep()
 	q.query.WriteString(fmt.Sprintf(format, args...))
-	q.insertSepNext = true
 	return q
 }
 
-func (q *Querier) AppendParams(params ...interface{}) *Querier {
-	q.params = append(q.params, params...)
+func (q *Querier) WriteFields(format, sep string, fields ...Field) *Querier {
+	q.writeSep()
+	q.writeFormat(format, sep, fields, len(fields))
 	return q
 }
 
-func (q *Querier) FieldDefinitions(prefix string, fields []Field) *Querier {
-	q.insertSep()
-	q.writeFields(prefix, fields, false, true, false)
-	q.insertSepNext = true
-	return q
-}
-
-func (q *Querier) Fields(array bool, fields []Field) *Querier {
-	q.insertSep()
-	q.writeFields("", fields, array, false, false)
-	return q
-}
-
-func (q *Querier) Values(array bool, values ...interface{}) *Querier {
-	q.insertSep()
-	q.writeBindVars(len(values), array)
+func (q *Querier) WriteValues(format, sep string, values ...interface{}) *Querier {
+	q.writeSep()
+	q.writeFormat(format, sep, nil, len(values))
 	q.params = append(q.params, values...)
 	return q
 }
 
-func (q *Querier) ValueMap(array bool, fields []Field, values ValueMap) *Querier {
-	q.insertSep()
-	q.writeBindVars(len(fields), array)
-	q.params = append(q.params, values.MapToFields(fields, nil)...)
+func (q *Querier) WriteValueMap(format, sep string, valueMap ValueMap, fields ...Field) *Querier {
+	q.writeSep()
+	q.writeFormat(format, sep, fields, len(fields))
+	q.params = append(q.params, valueMap.MapToFields(fields, nil)...)
 	return q
 }
 
-func (q *Querier) SetValues(fields []Field, values ValueMap) *Querier {
-	q.insertSep()
-	q.writeFields("", fields, false, false, true)
-	q.params = append(q.params, values.MapToFields(fields, nil)...)
+func (q *Querier) WriteRaw(s string) *Querier {
+	q.query.WriteString(s)
+	return q
+}
+
+func (q *Querier) SetSeparator(sep string) *Querier {
+	q.sep = sep
+	return q
+}
+
+func (q *Querier) AddParams(params ...interface{}) *Querier {
+	q.params = append(q.params, params...)
 	return q
 }
 
@@ -289,12 +272,8 @@ func (q *Querier) LastInsertID() int64 {
 	return q.lastInsertID
 }
 
-func (q *Querier) WriteString(s string) {
-	q.query.WriteString(s)
-}
-
 func (q *Querier) New() *Querier {
-	return &Querier{ex: q.ex, bindVar: q.bindVar}
+	return NewQuerier(q.ex, q.bindVar)
 }
 
 func (q *Querier) Reset() *Querier {
@@ -302,7 +281,7 @@ func (q *Querier) Reset() *Querier {
 	if q.params != nil {
 		q.params = q.params[:0]
 	}
-	q.insertSepNext = false
+	q.sep = Space
 	q.err = nil
 	q.lastInsertID, q.rowsAffected = 0, 0
 	if q.deferred != nil {
@@ -311,69 +290,9 @@ func (q *Querier) Reset() *Querier {
 	return q
 }
 
-func (q *Querier) insertSep() {
-	if q.insertSepNext {
-		q.query.WriteString(fieldSep)
-		q.insertSepNext = false
-	}
-}
-
-func (q *Querier) writeSpace(s string) {
-	q.query.WriteString(s)
-	q.query.WriteString(" ")
-}
-
-func (q *Querier) writeFields(prefix string, fields []Field, array, defs, sets bool) {
-	if array {
-		q.query.WriteString("(")
-	}
-
-	if len(fields) != 0 {
-		q.query.WriteString(prefix)
-		q.query.WriteString(fields[0].Name)
-		if defs {
-			q.query.WriteString(" ")
-			q.query.WriteString(fields[0].DataType)
-		}
-		if sets {
-			q.query.WriteString(" = ")
-			q.bindVar(q, 0)
-		}
-		for i := 1; i < len(fields); i++ {
-			q.query.WriteString(fieldSep)
-			q.query.WriteString(prefix)
-			q.query.WriteString(fields[i].Name)
-			if defs {
-				q.query.WriteString(" ")
-				q.query.WriteString(fields[i].DataType)
-			}
-			if sets {
-				q.query.WriteString(" = ")
-				q.bindVar(q, i)
-			}
-		}
-	}
-
-	if array {
-		q.query.WriteString(")")
-	}
-}
-
-func (q *Querier) writeBindVars(n int, array bool) {
-	if array {
-		q.query.WriteString("(")
-	}
-
-	if n > 0 {
-		q.bindVar(q, 0)
-		for i := 1; i < n; i++ {
-			q.query.WriteString(fieldSep)
-			q.bindVar(q, i)
-		}
-	}
-
-	if array {
-		q.query.WriteString(")")
+func (q *Querier) writeSep() {
+	if q.query.Len() > 0 {
+		q.query.WriteString(q.sep)
 	}
 }
 
@@ -385,5 +304,47 @@ func (q *Querier) returnErr(err error) error {
 func (q *Querier) runDeferred() {
 	for _, fn := range q.deferred {
 		fn(q)
+	}
+}
+
+const (
+	phName     = "{name}"
+	phDataType = "{dataType}"
+	phBindVar  = "{bindVar}"
+)
+
+func (q *Querier) writeFormat(format, sep string, fields []Field, n int) {
+	if n < 1 {
+		return
+	}
+
+	var (
+		hasName     = strings.Contains(format, phName)
+		hasDataType = strings.Contains(format, phDataType)
+		hasBindVar  = strings.Contains(format, phBindVar)
+	)
+
+	if fields == nil && (hasName || hasDataType) {
+		panic("format contains placeholder {name} or {dataType}, this is not allowed when only formatting values")
+	}
+
+	fmtr := func(i int, f *Field) {
+		part := format
+		if hasName {
+			part = strings.Replace(part, phName, f.Name, -1)
+		}
+		if hasDataType {
+			part = strings.Replace(part, phDataType, f.DataType, -1)
+		}
+		if hasBindVar {
+			part = strings.Replace(part, phBindVar, q.bindVar(q, i), -1)
+		}
+		q.query.WriteString(part)
+	}
+
+	fmtr(0, &fields[0])
+	for i := 1; i < n; i++ {
+		q.query.WriteString(sep)
+		fmtr(i, &fields[i])
 	}
 }

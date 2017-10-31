@@ -25,8 +25,8 @@ func TypeMapper(t reflect.Type) (out string, ok bool) {
 
 type DBInfo struct{}
 
-func (DBInfo) HasTable(ex sugar.Executor, tableName string) (tableExists bool, err error) {
-	err = sugar.NewQuerier(ex, sugar.DefaultBindVar).
+func (DBInfo) HasTable(db *sugar.DB, tableName string) (tableExists bool, err error) {
+	err = db.Querier().
 		Write("SELECT EXISTS ( SELECT table_name FROM information_schema.tables WHERE table_schema = (SELECT DATABASE())").
 		Write("AND table_name = ? )", tableName).
 		Scan(&tableExists)
@@ -34,8 +34,8 @@ func (DBInfo) HasTable(ex sugar.Executor, tableName string) (tableExists bool, e
 	return
 }
 
-func (DBInfo) TableColumns(ex sugar.Executor, tableName string) (columns []string, err error) {
-	err = sugar.NewQuerier(ex, sugar.DefaultBindVar).
+func (DBInfo) TableColumns(db *sugar.DB, tableName string) (columns []string, err error) {
+	err = db.Querier().
 		Write("SELECT column_name FROM information_schema.columns WHERE table_schema = (SELECT DATABASE())").
 		Write("AND table_name = ?", tableName).
 		ForEach(sugar.AppendToStringSlice(&columns))

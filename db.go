@@ -6,10 +6,8 @@ import "database/sql"
 type DB struct {
 	*sql.DB
 
-	// BindVar is the default bindvar formatter for this database.
-	BindVar Formatter
-	// Mapper is the default type mapper for this database.
-	Mapper TypeMapper
+	bindVar Formatter
+	mapper  TypeMapper
 }
 
 // Open opens and pings a database. See database/sql.Open for more information.
@@ -28,15 +26,22 @@ func Open(driverName, dataSourceName string) (*DB, error) {
 	}, nil
 }
 
+func OpenSpecial(driverName, dataSourceName string, bindVar Formatter, mapper TypeMapper) (*DB, error) {
+	db, err := Open(driverName, dataSourceName)
+	if err != nil {
+		return nil, err
+	}
+	db.bindVar = bindVar
+	db.mapper = mapper
+	return db, nil
+}
+
 // Fields returns a field selector with the database's TypeMapper. See sugar.Fields for more information.
 func (db *DB) Fields(i interface{}) *FieldSelector {
-	return Fields(i).SetTypeMapper(db.Mapper)
+	return Fields(i).SetTypeMapper(db.mapper)
 }
 
 // Querier returns a new Querier for this database.
 func (db *DB) Querier() *Querier {
-	return &Querier{
-		ex:      db.DB,
-		bindVar: db.BindVar,
-	}
+	return NewQuerier(db.DB, db.bindVar)
 }

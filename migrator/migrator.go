@@ -1,92 +1,123 @@
+// Package migrator implements a simple Model migrator using Sugar.
 package migrator
 
-import "github.com/semrekkers/sugar"
+import (
+	"fmt"
 
-const (
-	Initialize = ""
+	"github.com/semrekkers/sugar"
 )
 
+// Model that can be created or migrated. It contains callbacks that are called when migrating.
 type Model interface {
+	// TableName returns the model's table name.
 	TableName() string
-	Migrate(*sugar.Querier, string)
+
+	// CreateTable is called before the table is created. This is useful for, e.g. defining the primary key.
+	CreateTable(*sugar.Querier) error
+
+	// Migrate is called when the migrator discovered a new field in the model.
+	Migrate(db *sugar.DB, column string) error
 }
 
+// DBInfo is an interface for retrieving information about the database.
 type DBInfo interface {
-	HasTable(sugar.Executor, string) (bool, error)
-	TableColumns(sugar.Executor, string) ([]string, error)
+	HasTable(*sugar.DB, string) (bool, error)
+	TableColumns(*sugar.DB, string) ([]string, error)
 }
 
+// Migrator is the actual migrator. It is safe for multiple goroutines to call it's methods.
 type Migrator struct {
-	ex      sugar.Executor
-	bindVar sugar.Formatter
-	mapper  sugar.TypeMapper
-	dbInfo  DBInfo
+	db     *sugar.DB
+	dbInfo DBInfo
 }
 
+// Result contains the results of a successful migration.
 type Result struct {
-	Tables, Columns []string
+	TablesCreated, NewColumns []string
 }
 
-func New(ex sugar.Executor, bindVar sugar.Formatter, mapper sugar.TypeMapper, dbInfo DBInfo) *Migrator {
-	return &Migrator{ex, bindVar, mapper, dbInfo}
+// MigrationError describes a problem encountered during the migration.
+type MigrationError struct {
+	Table, Column string
+	Err           error
 }
 
-func NewFromDB(db *sugar.DB, dbInfo DBInfo) *Migrator {
-	return &Migrator{db.DB, db.BindVar, db.Mapper, dbInfo}
+func (e *MigrationError) Error() string {
+	if e.Column != "" {
+		return fmt.Sprintf("migration table %s, column %s: %s", e.Table, e.Column, e.Err.Error())
+	}
+	return fmt.Sprintf("migration table %s: %s", e.Table, e.Err.Error())
 }
 
+// New returns a new Migrator.
+func New(db *sugar.DB, dbInfo DBInfo) *Migrator {
+	return &Migrator{db, dbInfo}
+}
+
+// Migrate migrates the models.
 func (m *Migrator) Migrate(models ...Model) (*Result, error) {
-	var result Result
+	var res Result
 
 	for _, model := range models {
-		tableName := model.TableName()
-
-		tableExists, newColumns, err := m.migrateModel(tableName, model)
-		if err != nil {
+		if err := m.migrateModel(model, &res); err != nil {
 			return nil, err
 		}
-		if !tableExists {
-			result.Tables = append(result.Tables, tableName)
-		} else {
-			result.Columns = append(result.Columns, newColumns...)
-		}
 	}
 
-	return &result, nil
+	return &res, nil
 }
 
-func (m *Migrator) migrateModel(tableName string, model Model) (tableExists bool, newColumns []string, err error) {
-	tableExists, err = m.dbInfo.HasTable(m.ex, tableName)
-	if err != nil {
-		return
-	}
-
-	q := sugar.NewQuerier(m.ex, sugar.DefaultBindVar)
-	fieldSelector := sugar.Fields(model).SetTypeMapper(m.mapper)
-	if !tableExists {
-		q.Writef("CREATE TABLE %s (", tableName)
-		q.FieldDefinitions("", fieldSelector.Select())
-		model.Migrate(q, Initialize)
-		q.WriteString(")")
-	} else {
-		var columns []string
-		columns, err = m.dbInfo.TableColumns(m.ex, tableName)
+// Drop drops the models.
+func (m *Migrator) Drop(models ...Model) error {
+	for _, model := range models {
+		tableName := model.TableName()
+		err := m.db.Querier().Writef("DROP TABLE %s", tableName).Exec()
 		if err != nil {
-			return
-		}
-		fields := fieldSelector.Except(columns...).Select()
-		if len(fields) == 0 {
-			return
-		}
-
-		q.Writef("ALTER TABLE %s ", tableName)
-		q.FieldDefinitions("ADD ", fields)
-		for _, field := range fields {
-			model.Migrate(q, field.Name)
-			newColumns = append(newColumns, tableName+"."+field.Name)
+			return &MigrationError{Table: tableName, Err: err}
 		}
 	}
-	err = q.Exec()
+	return nil
+}
 
-	return
+func (m *Migrator) migrateModel(model Model, res *Result) error {
+	tableName := model.TableName()
+	tableExists, err := m.dbInfo.HasTable(m.db, tableName)
+	if err != nil {
+		return err
+	}
+
+	fieldSelector := m.db.Fields(model)
+	if !tableExists {
+		q := m.db.Querier().Writef("CREATE TABLE %s (", tableName).
+			WriteFields("{name} {dataType}", sugar.FieldSep, fieldSelector.Select()...)
+		q.SetSeparator(sugar.FieldSep)
+		if err = model.CreateTable(q); err != nil {
+			return &MigrationError{Table: tableName, Err: err}
+		}
+		q.WriteRaw(")")
+		if err = q.Exec(); err != nil {
+			return &MigrationError{Table: tableName, Err: err}
+		}
+		res.TablesCreated = append(res.TablesCreated, tableName)
+	} else {
+		existing, err := m.dbInfo.TableColumns(m.db, tableName)
+		if err != nil {
+			return err
+		}
+
+		for _, field := range fieldSelector.Except(existing...).Select() {
+			err = m.db.Querier().Writef("ALTER TABLE %s", tableName).
+				WriteFields("ADD {name} {dataType}", "", field).
+				Exec()
+			if err != nil {
+				return &MigrationError{Table: tableName, Column: field.Name, Err: err}
+			}
+			if err = model.Migrate(m.db, field.Name); err != nil {
+				return &MigrationError{Table: tableName, Column: field.Name, Err: err}
+			}
+			res.NewColumns = append(res.NewColumns, tableName+"."+field.Name)
+		}
+	}
+
+	return nil
 }
