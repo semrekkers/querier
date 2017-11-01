@@ -139,6 +139,15 @@ func (q *Querier) Defer(fn DeferFunc) *Querier {
 	return q
 }
 
+func (q *Querier) DeferSuccess(fn DeferFunc) *Querier {
+	q.deferred = append(q.deferred, func(q *Querier) {
+		if q.err == nil {
+			fn(q)
+		}
+	})
+	return q
+}
+
 func (q *Querier) ExecContext(ctx context.Context) error {
 	if q.query.Len() == 0 {
 		panic(errEmptyQuery)
@@ -284,6 +293,10 @@ func (q *Querier) RowsAffected() int64 {
 
 func (q *Querier) LastInsertID() int64 {
 	return q.lastInsertID
+}
+
+func (q *Querier) Error() error {
+	return q.err
 }
 
 func (q *Querier) New() *Querier {
