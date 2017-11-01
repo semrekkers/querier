@@ -18,11 +18,8 @@ func Open(dataSourceName string) (*sugar.DB, error) {
 
 func TypeMapper(t reflect.Type) (out string, ok bool) {
 	out, ok = sugar.DefaultTypeMapper(t)
-	if !ok {
-		switch t {
-		case reflectTypeNullTime:
-			ok, out = true, "DATETIME NULL"
-		}
+	if !ok && t == reflectTypeNullTime {
+		return "DATETIME NULL", true
 	}
 	return
 }

@@ -35,14 +35,14 @@ func TestDefaultTypeMapper(t *testing.T) {
 		{float32(0), "FLOAT NOT NULL", true},
 		{float64(0), "DOUBLE NOT NULL", true},
 
-		{false, "BIT NOT NULL", true},
+		{false, "BOOLEAN NOT NULL", true},
 
 		{[]byte{}, "VARBINARY(255) NULL", true},
 		{time.Time{}, "DATETIME NOT NULL", true},
 		{sql.NullString{}, "VARCHAR(255) NULL", true},
 		{sql.NullInt64{}, "BIGINT NULL", true},
 		{sql.NullFloat64{}, "DOUBLE NULL", true},
-		{sql.NullBool{}, "BIT NULL", true},
+		{sql.NullBool{}, "BOOLEAN NULL", true},
 
 		{reflect.Value{}, "", false},
 	}

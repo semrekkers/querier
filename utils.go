@@ -21,57 +21,49 @@ var (
 	reflectTypeNullBool    = reflect.TypeOf(sql.NullBool{})
 )
 
+var typeMap = map[reflect.Kind]string{
+	reflect.String:  "VARCHAR(255) NOT NULL",
+	reflect.Int:     "BIGINT NOT NULL",
+	reflect.Int64:   "BIGINT NOT NULL",
+	reflect.Int32:   "INT NOT NULL",
+	reflect.Int16:   "SMALLINT NOT NULL",
+	reflect.Int8:    "TINYINT NOT NULL",
+	reflect.Uint:    "BIGINT UNSIGNED NOT NULL",
+	reflect.Uint64:  "BIGINT UNSIGNED NOT NULL",
+	reflect.Uint32:  "INT UNSIGNED NOT NULL",
+	reflect.Uint16:  "SMALLINT UNSIGNED NOT NULL",
+	reflect.Uint8:   "TINYINT UNSIGNED NOT NULL",
+	reflect.Float64: "DOUBLE NOT NULL",
+	reflect.Float32: "FLOAT NOT NULL",
+	reflect.Bool:    "BOOLEAN NOT NULL",
+}
+
 // DefaultTypeMapper is the default type mapper.
 func DefaultTypeMapper(t reflect.Type) (out string, ok bool) {
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
 
+	if out, ok = typeMap[t.Kind()]; ok {
+		return
+	}
+
 	ok = true
-	switch t.Kind() {
-	case reflect.String:
-		out = "VARCHAR(255) NOT NULL"
-	case reflect.Int, reflect.Int64:
-		out = "BIGINT NOT NULL"
-	case reflect.Uint, reflect.Uint64:
-		out = "BIGINT UNSIGNED NOT NULL"
-	case reflect.Int32:
-		out = "INT NOT NULL"
-	case reflect.Uint32:
-		out = "INT UNSIGNED NOT NULL"
-	case reflect.Int16:
-		out = "SMALLINT NOT NULL"
-	case reflect.Uint16:
-		out = "SMALLINT UNSIGNED NOT NULL"
-	case reflect.Int8:
-		out = "TINYINT NOT NULL"
-	case reflect.Uint8:
-		out = "TINYINT UNSIGNED NOT NULL"
-	case reflect.Float64:
-		out = "DOUBLE NOT NULL"
-	case reflect.Float32:
-		out = "FLOAT NOT NULL"
-	case reflect.Bool:
-		out = "BIT NOT NULL"
-
+	switch t {
+	case reflectTypeByteSlice:
+		out = "VARBINARY(255) NULL"
+	case reflectTypeTime:
+		out = "DATETIME NOT NULL"
+	case reflectTypeNullString:
+		out = "VARCHAR(255) NULL"
+	case reflectTypeNullInt64:
+		out = "BIGINT NULL"
+	case reflectTypeNullFloat64:
+		out = "DOUBLE NULL"
+	case reflectTypeNullBool:
+		out = "BOOLEAN NULL"
 	default:
-		switch t {
-		case reflectTypeByteSlice:
-			out = "VARBINARY(255) NULL"
-		case reflectTypeTime:
-			out = "DATETIME NOT NULL"
-		case reflectTypeNullString:
-			out = "VARCHAR(255) NULL"
-		case reflectTypeNullInt64:
-			out = "BIGINT NULL"
-		case reflectTypeNullFloat64:
-			out = "DOUBLE NULL"
-		case reflectTypeNullBool:
-			out = "BIT NULL"
-
-		default:
-			ok = false
-		}
+		ok = false
 	}
 
 	return
