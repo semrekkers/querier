@@ -37,10 +37,9 @@ func (*dummy) TableName() string {
 	return "dummy_table"
 }
 
-func (*dummy) CreateTable(q *sugar.Querier) error {
+func (*dummy) CreateTable(q *sugar.Querier) {
 	q.Write("PRIMARY KEY (ID)")
 	q.Write("UNIQUE (Name)")
-	return nil
 }
 
 func (*dummy) Migrate(db *sugar.DB, column string) error {
