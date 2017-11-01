@@ -190,7 +190,7 @@ func (q *Querier) FirstContext(ctx context.Context, i interface{}) error {
 	if err != nil {
 		return q.returnErr(err)
 	}
-	err = rows.Scan(valueMap.MapToColumns(columns, nil))
+	err = rows.Scan(valueMap.MapToColumns(columns, nil)...)
 	return q.returnErr(err)
 }
 
