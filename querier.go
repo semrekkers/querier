@@ -47,9 +47,10 @@ type Querier struct {
 	bindVar Formatter
 
 	// Query builder
-	query  bytes.Buffer
-	sep    string
-	params []interface{}
+	query    bytes.Buffer
+	sep      string
+	preWrite string
+	params   []interface{}
 
 	// For deffered functions.
 	err          error
@@ -99,6 +100,19 @@ func (q *Querier) WriteValueMap(format, sep string, valueMap ValueMap, fields ..
 
 func (q *Querier) WriteRaw(s string) *Querier {
 	q.query.WriteString(s)
+	return q
+}
+
+func (q *Querier) PreWrite() *Querier {
+	if q.preWrite != "" {
+		q.writeSep()
+		q.query.WriteString(q.preWrite)
+	}
+	return q
+}
+
+func (q *Querier) SetPreWrite(s string) *Querier {
+	q.preWrite = s
 	return q
 }
 
