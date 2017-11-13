@@ -103,6 +103,15 @@ func (q *Querier) WriteRaw(s string) *Querier {
 	return q
 }
 
+func (q *Querier) Prepend(query string) *Querier {
+	var buf bytes.Buffer
+	buf.WriteString(query)
+	buf.WriteString(q.sep)
+	q.query.WriteTo(&buf)
+	q.query = buf
+	return q
+}
+
 func (q *Querier) PreWrite() *Querier {
 	if q.preWrite != "" {
 		q.writeSep()
@@ -301,6 +310,12 @@ func (q *Querier) Error() error {
 
 func (q *Querier) New() *Querier {
 	return NewQuerier(q.ex, q.bindVar)
+}
+
+func (q *Querier) Clone() *Querier {
+	clone := new(Querier)
+	*clone = *q
+	return clone
 }
 
 func (q *Querier) Reset() *Querier {
