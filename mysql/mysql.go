@@ -12,22 +12,20 @@ var (
 	reflectTypeNullTime = reflect.TypeOf(go_mysql.NullTime{})
 )
 
-func Open(dataSourceName string) (*sugar.DB, error) {
-	return sugar.OpenSpecial("mysql", dataSourceName, sugar.DefaultBindVar, TypeMapper)
+type Dialect struct {
+	sugar.Dialect
 }
 
-func TypeMapper(t reflect.Type) (out string, ok bool) {
-	out, ok = sugar.DefaultTypeMapper(t)
+func (d Dialect) TypeMapper(t reflect.Type) (dataType string, ok bool) {
+	dataType, ok = d.TypeMapper(t)
 	if !ok && t == reflectTypeNullTime {
 		return "DATETIME NULL", true
 	}
 	return
 }
 
-type DBInfo struct{}
-
-func (DBInfo) HasTable(db *sugar.DB, tableName string) (tableExists bool, err error) {
-	err = db.Querier().
+func (Dialect) HasTable(q *sugar.Querier, tableName string) (tableExists bool, err error) {
+	err = q.
 		Write("SELECT EXISTS ( SELECT table_name FROM information_schema.tables WHERE table_schema = (SELECT DATABASE())").
 		Write("AND table_name = ? )", tableName).
 		Scan(&tableExists)
@@ -35,8 +33,8 @@ func (DBInfo) HasTable(db *sugar.DB, tableName string) (tableExists bool, err er
 	return
 }
 
-func (DBInfo) TableColumns(db *sugar.DB, tableName string) (columns []string, err error) {
-	err = db.Querier().
+func (Dialect) TableColumns(q *sugar.Querier, tableName string) (columns []string, err error) {
+	err = q.
 		Write("SELECT column_name FROM information_schema.columns WHERE table_schema = (SELECT DATABASE())").
 		Write("AND table_name = ?", tableName).
 		ForEach(sugar.AppendToStringSlice(&columns))

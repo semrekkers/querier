@@ -1,3 +1,0 @@
-package sugar
-
-var ()

@@ -36,15 +36,10 @@ type DeferFunc func(*Querier)
 // ScanFunc is called for each row in the result set.
 type ScanFunc func(*Querier, *sql.Rows) error
 
-// Formatter formats a query or a part of a query.
-type Formatter func(*Querier, int) string
-
 // Querier can build and execute queries.
 type Querier struct {
 	ex Executor
-
-	// Formatters
-	bindVar Formatter
+	d  Dialect
 
 	// Query builder
 	query    bytes.Buffer
@@ -59,8 +54,9 @@ type Querier struct {
 	deferred     []DeferFunc
 }
 
-func NewQuerier(ex Executor, bindVar Formatter) *Querier {
-	return &Querier{ex: ex, bindVar: bindVar, sep: Space}
+// New returns a new Querier.
+func New(ex Executor, d Dialect) *Querier {
+	return &Querier{ex: ex, d: d, sep: Space}
 }
 
 // Write writes a string (query) to the Querier. A single space is appended after query.
@@ -127,6 +123,11 @@ func (q *Querier) SetPreWrite(s string) *Querier {
 
 func (q *Querier) SetSeparator(sep string) *Querier {
 	q.sep = sep
+	return q
+}
+
+func (q *Querier) SetDialect(d Dialect) *Querier {
+	q.d = d
 	return q
 }
 
@@ -309,7 +310,7 @@ func (q *Querier) Error() error {
 }
 
 func (q *Querier) New() *Querier {
-	return NewQuerier(q.ex, q.bindVar)
+	return New(q.ex, q.d)
 }
 
 func (q *Querier) Clone() *Querier {
@@ -330,6 +331,11 @@ func (q *Querier) Reset() *Querier {
 		q.deferred = q.deferred[:0]
 	}
 	return q
+}
+
+// Fields does the same thing as Fields() but it also sets the Dialect.
+func (q *Querier) Fields(i interface{}) *FieldSelector {
+	return Fields(i).SetDialect(q.d)
 }
 
 func (q *Querier) writeSep() {
@@ -379,7 +385,7 @@ func (q *Querier) writeFormat(format, sep string, fields []Field, n int) {
 			part = strings.Replace(part, phDataType, f.DataType, -1)
 		}
 		if hasBindVar {
-			part = strings.Replace(part, phBindVar, q.bindVar(q, i), -1)
+			part = strings.Replace(part, phBindVar, q.d.BindVar(q, i), -1)
 		}
 		q.query.WriteString(part)
 	}
@@ -389,4 +395,24 @@ func (q *Querier) writeFormat(format, sep string, fields []Field, n int) {
 		q.query.WriteString(sep)
 		fmtr(i, &fields[i])
 	}
+}
+
+func extractStructSliceInfo(i interface{}) (v reflect.Value, elemType reflect.Type, elemIsPtr bool) {
+	v = reflect.ValueOf(i)
+	if v.Kind() != reflect.Ptr {
+		panic("argument i is not a pointer")
+	}
+	v = v.Elem()
+	if v.Kind() != reflect.Slice {
+		panic("argument i is not a pointer to a slice")
+	}
+	elemType = v.Type().Elem()
+	if elemType.Kind() == reflect.Ptr {
+		elemType = elemType.Elem()
+		elemIsPtr = true
+	}
+	if elemType.Kind() != reflect.Struct {
+		panic("argument i is not a slice of (pointers to) structs")
+	}
+	return
 }

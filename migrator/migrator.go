@@ -2,6 +2,7 @@
 package migrator
 
 import (
+	"database/sql"
 	"fmt"
 
 	"github.com/semrekkers/sugar"
@@ -16,18 +17,19 @@ type Model interface {
 	CreateTable(*sugar.Querier)
 
 	// Migrate is called when the migrator discovered a new field in the model.
-	Migrate(db *sugar.DB, column string) error
+	Migrate(q *sugar.Querier, column string) error
 }
 
 // DBInfo is an interface for retrieving information about the database.
 type DBInfo interface {
-	HasTable(*sugar.DB, string) (bool, error)
-	TableColumns(*sugar.DB, string) ([]string, error)
+	sugar.Dialect
+	HasTable(*sugar.Querier, string) (bool, error)
+	TableColumns(*sugar.Querier, string) ([]string, error)
 }
 
 // Migrator is the actual migrator. It is safe for multiple goroutines to call it's methods.
 type Migrator struct {
-	db     *sugar.DB
+	db     *sql.DB
 	dbInfo DBInfo
 }
 
@@ -50,7 +52,7 @@ func (e *MigrationError) Error() string {
 }
 
 // New returns a new Migrator.
-func New(db *sugar.DB, dbInfo DBInfo) *Migrator {
+func New(db *sql.DB, dbInfo DBInfo) *Migrator {
 	return &Migrator{db, dbInfo}
 }
 
@@ -69,28 +71,32 @@ func (m *Migrator) Migrate(models ...Model) (*Result, error) {
 
 // Drop drops the models.
 func (m *Migrator) Drop(models ...Model) error {
+	q := sugar.New(m.db, m.dbInfo)
 	for _, model := range models {
 		tableName := model.TableName()
-		err := m.db.Querier().Writef("DROP TABLE %s", tableName).Exec()
+		err := q.Writef("DROP TABLE %s", tableName).Exec()
 		if err != nil {
 			return &MigrationError{Table: tableName, Err: err}
 		}
+		q.Reset()
 	}
 	return nil
 }
 
 func (m *Migrator) migrateModel(model Model, res *Result) error {
+	q := sugar.New(m.db, m.dbInfo)
 	tableName := model.TableName()
-	tableExists, err := m.dbInfo.HasTable(m.db, tableName)
+	tableExists, err := m.dbInfo.HasTable(q, tableName)
 	if err != nil {
 		return err
 	}
+	q.Reset()
 
-	fieldSelector := m.db.Fields(model)
+	fieldSelector := q.Fields(model)
 	if !tableExists {
-		q := m.db.Querier().Writef("CREATE TABLE %s (", tableName).
-			WriteFields("{name} {dataType}", sugar.FieldSep, fieldSelector.Select()...)
-		q.SetSeparator(sugar.FieldSep)
+		q.Writef("CREATE TABLE %s (", tableName).
+			WriteFields("{name} {dataType}", sugar.FieldSep, fieldSelector.Select()...).
+			SetSeparator(sugar.FieldSep)
 		model.CreateTable(q)
 		q.WriteRaw(")")
 		if err = q.Exec(); err != nil {
@@ -98,19 +104,21 @@ func (m *Migrator) migrateModel(model Model, res *Result) error {
 		}
 		res.TablesCreated = append(res.TablesCreated, tableName)
 	} else {
-		existing, err := m.dbInfo.TableColumns(m.db, tableName)
+		existing, err := m.dbInfo.TableColumns(q, tableName)
 		if err != nil {
 			return err
 		}
+		q.Reset()
 
 		for _, field := range fieldSelector.Except(existing...).Select() {
-			err = m.db.Querier().Writef("ALTER TABLE %s", tableName).
+			err = q.Writef("ALTER TABLE %s", tableName).
 				WriteFields("ADD {name} {dataType}", "", field).
 				Exec()
 			if err != nil {
 				return &MigrationError{Table: tableName, Column: field.Name, Err: err}
 			}
-			if err = model.Migrate(m.db, field.Name); err != nil {
+			q.Reset()
+			if err = model.Migrate(q, field.Name); err != nil {
 				return &MigrationError{Table: tableName, Column: field.Name, Err: err}
 			}
 			res.NewColumns = append(res.NewColumns, tableName+"."+field.Name)

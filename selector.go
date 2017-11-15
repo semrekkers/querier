@@ -4,9 +4,6 @@ import (
 	"reflect"
 )
 
-// TypeMapper maps a Go type to a DataType.
-type TypeMapper func(reflect.Type) (string, bool)
-
 // Field represents a mapped field.
 type Field struct {
 	// Name is the field's name.
@@ -18,11 +15,10 @@ type Field struct {
 // FieldSelector selects struct fields from a struct type and builds a Field slice.
 type FieldSelector struct {
 	t reflect.Type
+	d Dialect
 
 	filterSet     map[string]struct{}
 	filterExclude bool
-
-	mapper TypeMapper
 }
 
 // Fields returns a new FieldSelector with i as base struct. Fields panics when i is non-struct.
@@ -36,8 +32,8 @@ func Fields(i interface{}) *FieldSelector {
 		panic("argument i is not a struct")
 	}
 	return &FieldSelector{
-		t:      t,
-		mapper: DefaultTypeMapper,
+		t: t,
+		d: Default{},
 	}
 }
 
@@ -70,14 +66,14 @@ func (s *FieldSelector) Except(fields ...string) *FieldSelector {
 	return s
 }
 
-// SetTypeMapper sets the TypeMapper for this FieldSelector.
-func (s *FieldSelector) SetTypeMapper(m TypeMapper) *FieldSelector {
-	s.mapper = m
+// SetDialect sets the Dialect for this FieldSelector.
+func (s *FieldSelector) SetDialect(d Dialect) *FieldSelector {
+	s.d = d
 	return s
 }
 
 func (s *FieldSelector) Select() []Field {
-	return makeFieldSlice(s.t, nil, s.mapper, s.filterSet, s.filterExclude)
+	return makeFieldSlice(s.t, nil, s.d, s.filterSet, s.filterExclude)
 }
 
 type ValueMap map[string]reflect.Value
@@ -130,7 +126,7 @@ func (m ValueMap) MapToFields(fields []Field, values []interface{}) []interface{
 	return values
 }
 
-func makeFieldSlice(t reflect.Type, fields []Field, mapper TypeMapper, filterSet map[string]struct{}, filterExclude bool) []Field {
+func makeFieldSlice(t reflect.Type, fields []Field, d Dialect, filterSet map[string]struct{}, filterExclude bool) []Field {
 	numField := t.NumField()
 	if fields == nil {
 		fields = make([]Field, 0, numField)
@@ -138,7 +134,7 @@ func makeFieldSlice(t reflect.Type, fields []Field, mapper TypeMapper, filterSet
 
 	for i := 0; i < numField; i++ {
 		cur := t.Field(i)
-		name, dataType, ignore, inlineStruct := extractFieldInfo(&cur, mapper)
+		name, dataType, ignore, inlineStruct := extractFieldInfo(&cur, d)
 
 		if ignore {
 			// Skip this field.
@@ -146,7 +142,7 @@ func makeFieldSlice(t reflect.Type, fields []Field, mapper TypeMapper, filterSet
 		}
 		if inlineStruct {
 			// Flatten this inline struct.
-			fields = makeFieldSlice(cur.Type, fields, mapper, filterSet, filterExclude)
+			fields = makeFieldSlice(cur.Type, fields, d, filterSet, filterExclude)
 			continue
 		}
 		if filterSet != nil {
