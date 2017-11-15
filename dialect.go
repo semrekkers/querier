@@ -12,7 +12,7 @@ type Dialect interface {
 	TypeMapper(t reflect.Type) (dataType string, ok bool)
 
 	// BindVar returns a formatted bind variable. i represents the current iteration.
-	BindVar(q *Querier, i int) string
+	BindVar(q *Q, i int) string
 }
 
 // Default is the default SQL-dialect.
@@ -77,6 +77,6 @@ func (Default) TypeMapper(t reflect.Type) (dataType string, ok bool) {
 }
 
 // BindVar returns the default bindvar.
-func (Default) BindVar(*Querier, int) string {
+func (Default) BindVar(*Q, int) string {
 	return "?"
 }

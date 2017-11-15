@@ -15,7 +15,7 @@ func AppendToStringSlice(s *[]string) ScanFunc {
 	if s == nil {
 		panic("invalid string slice")
 	}
-	return func(_ *Querier, r *sql.Rows) error {
+	return func(_ *Q, r *sql.Rows) error {
 		var str string
 		if err := r.Scan(&str); err != nil {
 			return err

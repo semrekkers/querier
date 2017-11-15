@@ -14,17 +14,17 @@ type Model interface {
 	TableName() string
 
 	// CreateTable is called before the table is created. This is useful for, e.g. defining the primary key.
-	CreateTable(*sugar.Querier)
+	CreateTable(*sugar.Q)
 
 	// Migrate is called when the migrator discovered a new field in the model.
-	Migrate(q *sugar.Querier, column string) error
+	Migrate(q *sugar.Q, column string) error
 }
 
 // DBInfo is an interface for retrieving information about the database.
 type DBInfo interface {
 	sugar.Dialect
-	HasTable(*sugar.Querier, string) (bool, error)
-	TableColumns(*sugar.Querier, string) ([]string, error)
+	HasTable(*sugar.Q, string) (bool, error)
+	TableColumns(*sugar.Q, string) ([]string, error)
 }
 
 // Migrator is the actual migrator. It is safe for multiple goroutines to call it's methods.

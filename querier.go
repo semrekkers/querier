@@ -31,13 +31,13 @@ type Executor interface {
 }
 
 // DeferFunc runs when the query is finished.
-type DeferFunc func(*Querier)
+type DeferFunc func(*Q)
 
 // ScanFunc is called for each row in the result set.
-type ScanFunc func(*Querier, *sql.Rows) error
+type ScanFunc func(*Q, *sql.Rows) error
 
-// Querier can build and execute queries.
-type Querier struct {
+// Q can build and execute queries.
+type Q struct {
 	ex Executor
 	d  Dialect
 
@@ -54,13 +54,13 @@ type Querier struct {
 	deferred     []DeferFunc
 }
 
-// New returns a new Querier.
-func New(ex Executor, d Dialect) *Querier {
-	return &Querier{ex: ex, d: d, sep: Space}
+// New returns a new querier.
+func New(ex Executor, d Dialect) *Q {
+	return &Q{ex: ex, d: d, sep: Space}
 }
 
 // Write writes a string (query) to the Querier. A single space is appended after query.
-func (q *Querier) Write(query string, params ...interface{}) *Querier {
+func (q *Q) Write(query string, params ...interface{}) *Q {
 	q.writeSep()
 	q.query.WriteString(query)
 	q.params = append(q.params, params...)
@@ -68,38 +68,38 @@ func (q *Querier) Write(query string, params ...interface{}) *Querier {
 }
 
 // Writef writes a formatted string (format) to the Querier. A single space is appended after query.
-func (q *Querier) Writef(format string, args ...interface{}) *Querier {
+func (q *Q) Writef(format string, args ...interface{}) *Q {
 	q.writeSep()
 	q.query.WriteString(fmt.Sprintf(format, args...))
 	return q
 }
 
-func (q *Querier) WriteFields(format, sep string, fields ...Field) *Querier {
+func (q *Q) WriteFields(format, sep string, fields ...Field) *Q {
 	q.writeSep()
 	q.writeFormat(format, sep, fields, len(fields))
 	return q
 }
 
-func (q *Querier) WriteValues(format, sep string, values ...interface{}) *Querier {
+func (q *Q) WriteValues(format, sep string, values ...interface{}) *Q {
 	q.writeSep()
 	q.writeFormat(format, sep, nil, len(values))
 	q.params = append(q.params, values...)
 	return q
 }
 
-func (q *Querier) WriteValueMap(format, sep string, valueMap ValueMap, fields ...Field) *Querier {
+func (q *Q) WriteValueMap(format, sep string, valueMap ValueMap, fields ...Field) *Q {
 	q.writeSep()
 	q.writeFormat(format, sep, fields, len(fields))
 	q.params = append(q.params, valueMap.MapToFields(fields, nil)...)
 	return q
 }
 
-func (q *Querier) WriteRaw(s string) *Querier {
+func (q *Q) WriteRaw(s string) *Q {
 	q.query.WriteString(s)
 	return q
 }
 
-func (q *Querier) Prepend(query string) *Querier {
+func (q *Q) Prepend(query string) *Q {
 	var buf bytes.Buffer
 	buf.WriteString(query)
 	buf.WriteString(q.sep)
@@ -108,7 +108,7 @@ func (q *Querier) Prepend(query string) *Querier {
 	return q
 }
 
-func (q *Querier) PreWrite() *Querier {
+func (q *Q) PreWrite() *Q {
 	if q.preWrite != "" {
 		q.writeSep()
 		q.query.WriteString(q.preWrite)
@@ -116,41 +116,41 @@ func (q *Querier) PreWrite() *Querier {
 	return q
 }
 
-func (q *Querier) SetPreWrite(s string) *Querier {
+func (q *Q) SetPreWrite(s string) *Q {
 	q.preWrite = s
 	return q
 }
 
-func (q *Querier) SetSeparator(sep string) *Querier {
+func (q *Q) SetSeparator(sep string) *Q {
 	q.sep = sep
 	return q
 }
 
-func (q *Querier) SetDialect(d Dialect) *Querier {
+func (q *Q) SetDialect(d Dialect) *Q {
 	q.d = d
 	return q
 }
 
-func (q *Querier) AddParams(params ...interface{}) *Querier {
+func (q *Q) AddParams(params ...interface{}) *Q {
 	q.params = append(q.params, params...)
 	return q
 }
 
-func (q *Querier) Params() []interface{} {
+func (q *Q) Params() []interface{} {
 	return q.params
 }
 
-func (q *Querier) String() string {
+func (q *Q) String() string {
 	return q.query.String()
 }
 
-func (q *Querier) Defer(fn DeferFunc) *Querier {
+func (q *Q) Defer(fn DeferFunc) *Q {
 	q.deferred = append(q.deferred, fn)
 	return q
 }
 
-func (q *Querier) DeferSuccess(fn DeferFunc) *Querier {
-	q.deferred = append(q.deferred, func(q *Querier) {
+func (q *Q) DeferSuccess(fn DeferFunc) *Q {
+	q.deferred = append(q.deferred, func(q *Q) {
 		if q.err == nil {
 			fn(q)
 		}
@@ -158,7 +158,7 @@ func (q *Querier) DeferSuccess(fn DeferFunc) *Querier {
 	return q
 }
 
-func (q *Querier) ExecContext(ctx context.Context) error {
+func (q *Q) ExecContext(ctx context.Context) error {
 	if q.query.Len() == 0 {
 		panic(errEmptyQuery)
 	}
@@ -176,11 +176,11 @@ func (q *Querier) ExecContext(ctx context.Context) error {
 	return q.returnErr(err)
 }
 
-func (q *Querier) Exec() error {
+func (q *Q) Exec() error {
 	return q.ExecContext(context.Background())
 }
 
-func (q *Querier) FirstContext(ctx context.Context, i interface{}) error {
+func (q *Q) FirstContext(ctx context.Context, i interface{}) error {
 	if q.query.Len() == 0 {
 		panic(errEmptyQuery)
 	}
@@ -204,11 +204,11 @@ func (q *Querier) FirstContext(ctx context.Context, i interface{}) error {
 	return q.returnErr(err)
 }
 
-func (q *Querier) First(i interface{}) error {
+func (q *Q) First(i interface{}) error {
 	return q.FirstContext(context.Background(), i)
 }
 
-func (q *Querier) FindContext(ctx context.Context, i interface{}) error {
+func (q *Q) FindContext(ctx context.Context, i interface{}) error {
 	if q.query.Len() == 0 {
 		panic(errEmptyQuery)
 	}
@@ -245,11 +245,11 @@ func (q *Querier) FindContext(ctx context.Context, i interface{}) error {
 	return nil
 }
 
-func (q *Querier) Find(i interface{}) error {
+func (q *Q) Find(i interface{}) error {
 	return q.FindContext(context.Background(), i)
 }
 
-func (q *Querier) ScanContext(ctx context.Context, dest ...interface{}) error {
+func (q *Q) ScanContext(ctx context.Context, dest ...interface{}) error {
 	if q.query.Len() == 0 {
 		panic(errEmptyQuery)
 	}
@@ -268,11 +268,11 @@ func (q *Querier) ScanContext(ctx context.Context, dest ...interface{}) error {
 	return q.returnErr(err)
 }
 
-func (q *Querier) Scan(dest ...interface{}) error {
+func (q *Q) Scan(dest ...interface{}) error {
 	return q.ScanContext(context.Background(), dest...)
 }
 
-func (q *Querier) ForEachContext(ctx context.Context, fn ScanFunc) error {
+func (q *Q) ForEachContext(ctx context.Context, fn ScanFunc) error {
 	if q.query.Len() == 0 {
 		panic(errEmptyQuery)
 	}
@@ -293,33 +293,33 @@ func (q *Querier) ForEachContext(ctx context.Context, fn ScanFunc) error {
 	return nil
 }
 
-func (q *Querier) ForEach(fn ScanFunc) error {
+func (q *Q) ForEach(fn ScanFunc) error {
 	return q.ForEachContext(context.Background(), fn)
 }
 
-func (q *Querier) RowsAffected() int64 {
+func (q *Q) RowsAffected() int64 {
 	return q.rowsAffected
 }
 
-func (q *Querier) LastInsertID() int64 {
+func (q *Q) LastInsertID() int64 {
 	return q.lastInsertID
 }
 
-func (q *Querier) Error() error {
+func (q *Q) Error() error {
 	return q.err
 }
 
-func (q *Querier) New() *Querier {
+func (q *Q) New() *Q {
 	return New(q.ex, q.d)
 }
 
-func (q *Querier) Clone() *Querier {
-	clone := new(Querier)
+func (q *Q) Clone() *Q {
+	clone := new(Q)
 	*clone = *q
 	return clone
 }
 
-func (q *Querier) Reset() *Querier {
+func (q *Q) Reset() *Q {
 	q.query.Reset()
 	if q.params != nil {
 		q.params = q.params[:0]
@@ -334,22 +334,22 @@ func (q *Querier) Reset() *Querier {
 }
 
 // Fields does the same thing as Fields() but it also sets the Dialect.
-func (q *Querier) Fields(i interface{}) *FieldSelector {
+func (q *Q) Fields(i interface{}) *FieldSelector {
 	return Fields(i).SetDialect(q.d)
 }
 
-func (q *Querier) writeSep() {
+func (q *Q) writeSep() {
 	if q.query.Len() > 0 {
 		q.query.WriteString(q.sep)
 	}
 }
 
-func (q *Querier) returnErr(err error) error {
+func (q *Q) returnErr(err error) error {
 	q.err = err
 	return err
 }
 
-func (q *Querier) runDeferred() {
+func (q *Q) runDeferred() {
 	for _, fn := range q.deferred {
 		fn(q)
 	}
@@ -361,7 +361,7 @@ const (
 	phBindVar  = "{bindVar}"
 )
 
-func (q *Querier) writeFormat(format, sep string, fields []Field, n int) {
+func (q *Q) writeFormat(format, sep string, fields []Field, n int) {
 	if n < 1 {
 		return
 	}

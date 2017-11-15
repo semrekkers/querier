@@ -24,7 +24,7 @@ func (d Dialect) TypeMapper(t reflect.Type) (dataType string, ok bool) {
 	return
 }
 
-func (Dialect) HasTable(q *sugar.Querier, tableName string) (tableExists bool, err error) {
+func (Dialect) HasTable(q *sugar.Q, tableName string) (tableExists bool, err error) {
 	err = q.
 		Write("SELECT EXISTS ( SELECT table_name FROM information_schema.tables WHERE table_schema = (SELECT DATABASE())").
 		Write("AND table_name = ? )", tableName).
@@ -33,7 +33,7 @@ func (Dialect) HasTable(q *sugar.Querier, tableName string) (tableExists bool, e
 	return
 }
 
-func (Dialect) TableColumns(q *sugar.Querier, tableName string) (columns []string, err error) {
+func (Dialect) TableColumns(q *sugar.Q, tableName string) (columns []string, err error) {
 	err = q.
 		Write("SELECT column_name FROM information_schema.columns WHERE table_schema = (SELECT DATABASE())").
 		Write("AND table_name = ?", tableName).
