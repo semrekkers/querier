@@ -3,7 +3,7 @@ package mysql
 import (
 	"reflect"
 
-	"github.com/semrekkers/sugar"
+	"github.com/semrekkers/querier"
 
 	go_mysql "github.com/go-sql-driver/mysql"
 )
@@ -13,7 +13,7 @@ var (
 )
 
 type Dialect struct {
-	sugar.Dialect
+	querier.Dialect
 }
 
 func (d Dialect) TypeMapper(t reflect.Type) (dataType string, ok bool) {
@@ -24,7 +24,7 @@ func (d Dialect) TypeMapper(t reflect.Type) (dataType string, ok bool) {
 	return
 }
 
-func (Dialect) HasTable(q *sugar.Q, tableName string) (tableExists bool, err error) {
+func (Dialect) HasTable(q *querier.Q, tableName string) (tableExists bool, err error) {
 	err = q.
 		Write("SELECT EXISTS ( SELECT table_name FROM information_schema.tables WHERE table_schema = (SELECT DATABASE())").
 		Write("AND table_name = ? )", tableName).
@@ -33,11 +33,11 @@ func (Dialect) HasTable(q *sugar.Q, tableName string) (tableExists bool, err err
 	return
 }
 
-func (Dialect) TableColumns(q *sugar.Q, tableName string) (columns []string, err error) {
+func (Dialect) TableColumns(q *querier.Q, tableName string) (columns []string, err error) {
 	err = q.
 		Write("SELECT column_name FROM information_schema.columns WHERE table_schema = (SELECT DATABASE())").
 		Write("AND table_name = ?", tableName).
-		ForEach(sugar.AppendToStringSlice(&columns))
+		ForEach(querier.AppendToStringSlice(&columns))
 
 	return
 }

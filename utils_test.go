@@ -1,4 +1,4 @@
-package sugar
+package  querier
 
 import (
 	"reflect"

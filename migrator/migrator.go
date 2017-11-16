@@ -1,11 +1,11 @@
-// Package migrator implements a simple Model migrator using Sugar.
+// Package migrator implements a simple Model migrator using Querier.
 package migrator
 
 import (
 	"database/sql"
 	"fmt"
 
-	"github.com/semrekkers/sugar"
+	"github.com/semrekkers/querier"
 )
 
 // Model that can be created or migrated. It contains callbacks that are called when migrating.
@@ -14,17 +14,17 @@ type Model interface {
 	TableName() string
 
 	// CreateTable is called before the table is created. This is useful for, e.g. defining the primary key.
-	CreateTable(*sugar.Q)
+	CreateTable(*querier.Q)
 
 	// Migrate is called when the migrator discovered a new field in the model.
-	Migrate(q *sugar.Q, column string) error
+	Migrate(q *querier.Q, column string) error
 }
 
 // DBInfo is an interface for retrieving information about the database.
 type DBInfo interface {
-	sugar.Dialect
-	HasTable(*sugar.Q, string) (bool, error)
-	TableColumns(*sugar.Q, string) ([]string, error)
+	querier.Dialect
+	HasTable(*querier.Q, string) (bool, error)
+	TableColumns(*querier.Q, string) ([]string, error)
 }
 
 // Migrator is the actual migrator. It is safe for multiple goroutines to call it's methods.
@@ -71,7 +71,7 @@ func (m *Migrator) Migrate(models ...Model) (*Result, error) {
 
 // Drop drops the models.
 func (m *Migrator) Drop(models ...Model) error {
-	q := sugar.New(m.db, m.dbInfo)
+	q := querier.New(m.db, m.dbInfo)
 	for _, model := range models {
 		tableName := model.TableName()
 		err := q.Writef("DROP TABLE %s", tableName).Exec()
@@ -84,7 +84,7 @@ func (m *Migrator) Drop(models ...Model) error {
 }
 
 func (m *Migrator) migrateModel(model Model, res *Result) error {
-	q := sugar.New(m.db, m.dbInfo)
+	q := querier.New(m.db, m.dbInfo)
 	tableName := model.TableName()
 	tableExists, err := m.dbInfo.HasTable(q, tableName)
 	if err != nil {
@@ -95,8 +95,8 @@ func (m *Migrator) migrateModel(model Model, res *Result) error {
 	fieldSelector := q.Fields(model)
 	if !tableExists {
 		q.Writef("CREATE TABLE %s (", tableName).
-			WriteFields("{name} {dataType}", sugar.FieldSep, fieldSelector.Select()...).
-			SetSeparator(sugar.FieldSep)
+			WriteFields("{name} {dataType}", querier.FieldSep, fieldSelector.Select()...).
+			SetSeparator(querier.FieldSep)
 		model.CreateTable(q)
 		q.WriteRaw(")")
 		if err = q.Exec(); err != nil {

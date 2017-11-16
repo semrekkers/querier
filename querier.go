@@ -1,4 +1,5 @@
-package sugar
+// Package querier provides a simple SQL query builder and executor.
+package querier
 
 import (
 	"bytes"
